@@ -636,7 +636,7 @@ void launch_reconstruct_LorenzoI_var(
     };
 
     constexpr auto SUBLEN_1D = 256;
-    constexpr auto SEQ_1D    = 8;  // x-sequentiality == 8
+    // constexpr auto SEQ_1D    = 8;  // x-sequentiality == 8
     constexpr auto BLOCK_1D  = dim3(256 / 8, 1, 1);
     auto           GRID_1D   = pardeg3(len3, SUBLEN_1D);
 

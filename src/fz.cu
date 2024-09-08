@@ -1,3 +1,5 @@
+#ifndef FZ_KERNEL_ONLY
+
 #include <cuda_runtime.h>
 #include <dirent.h>
 #include <stdint.h>
@@ -107,6 +109,8 @@ void write_array_to_binary(const std::string& fname, T* const _a, size_t const d
     ofs.write(reinterpret_cast<const char*>(_a), std::streamsize(dtype_dataTypeLen * sizeof(T)));
     ofs.close();
 }
+
+#endif
 
 __global__ void compressionFusedKernel(
     const uint32_t* __restrict__ in,
@@ -394,6 +398,8 @@ __global__ void decompressionFusedKernel(
     deviceOutput[tid + bid * blockDim.x * blockDim.y] = dataChunk[threadIdx.y][threadIdx.x];
 }
 
+#ifndef FZ_KERNEL_ONLY
+
 void runFzgpu(std::string fileName, int x, int y, int z, double eb)
 {
     auto inputDimension = dim3(x, y, z);
@@ -602,3 +608,5 @@ int main(int argc, char* argv[])
     runFzgpu(fileName, x, y, z, eb);
     return 0;
 }
+
+#endif
