@@ -1,4 +1,8 @@
 #include <string>
+#include <iostream>
+
+using std::cout;
+using std::endl;
 
 #include "fz_driver.hh"
 
@@ -16,6 +20,9 @@ int main(int argc, char* argv[])
   auto const z = std::stoi(argv[4]);
   auto const eb = std::stod(argv[5]);
 
-  fzgpu::fzgpu_compressor_roundtrip(fname, x, y, z, eb);
+  cout << "\nfzgpu_reference_compressor_roundtrip\n" << endl;
+  fzgpu::fzgpu_reference_compressor_roundtrip(fname, x, y, z, eb);
+  cout << "\nfzgpu_compressor_roundtrip_v1\n" << endl;
+  fzgpu::fzgpu_compressor_roundtrip_v1(fname, x, y, z, eb);
   return 0;
 }

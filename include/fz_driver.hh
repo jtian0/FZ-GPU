@@ -2,6 +2,7 @@
 #define AAA05CE8_BA0A_4271_B0A1_8ACDD51AFF1F
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 
 #include "fz_module.hh"
@@ -9,6 +10,7 @@
 namespace fzgpu {
 
 using time_t = std::chrono::time_point<std::chrono::system_clock>;
+using duration_t = std::chrono::duration<double>;
 
 class internal_membuf {
   bool verify_on;
@@ -38,19 +40,46 @@ class internal_membuf {
   ~internal_membuf();
 };
 
+class Compressor {
+ private:
+  fzgpu::config_map const config;
+  fzgpu::internal_membuf* buf;
+  int const x, y, z;
+
+  dim3 len3;  // TODO use vendor-agnostic type
+
+  void postenc_make_offsetsum_on_host();
+  size_t postenc_calc_compressed_size();
+
+ public:
+  fzgpu::time_t comp_start, comp_end, decomp_start, decomp_end;
+
+  using T = float;
+  using E = uint16_t;
+  Compressor(int const x, int const y, int const z);
+  ~Compressor();
+  static void profile_data_range(
+      float* h_input, size_t const len, double& range);
+  void compress(
+      float* d_in, double const eb, uint16_t** pd_archive, size_t* archive_size, void* stream);
+  void decompress(uint16_t* d_archive, double const eb, void* stream);
+
+  // getter (testing purposes)
+  float*& input_hptr() const { return buf->h_input; };
+  float*& input_dptr() const { return buf->d_input; };
+  fzgpu::internal_membuf* const& membuf() const { return buf; };
+};
+
 }  // namespace fzgpu
-
-namespace fzgpu::utils {
-
-template <typename T>
-void verify_data(T* xdata, T* odata, size_t len);
-}
 
 namespace fzgpu {
 
-void fzgpu_compressor_roundtrip(
+void fzgpu_reference_compressor_roundtrip(
     std::string fname, int const x, int const y, int const z, double eb);
 
-}
+void fzgpu_compressor_roundtrip_v1(
+    std::string fname, int const x, int const y, int const z, double eb);
+
+}  // namespace fzgpu
 
 #endif /* AAA05CE8_BA0A_4271_B0A1_8ACDD51AFF1F */

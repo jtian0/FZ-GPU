@@ -1,3 +1,4 @@
+
 #include "fz_driver.hh"
 
 #include <cuda_runtime.h>
@@ -9,6 +10,7 @@
 #include <cstdlib>
 
 #include "fz_module.hh"
+#include "fz_utils.hh"
 #include "utils/io.hh"
 
 namespace {
@@ -26,56 +28,6 @@ static void check_cuda_error(cudaError_t status, const char* file, int line)
 
 }  // namespace
 
-namespace fzgpu::utils {
-
-template <typename T>
-void verify_data(T* xdata, T* odata, size_t len)
-{
-  double max_odata = odata[0], min_odata = odata[0];
-  double max_xdata = xdata[0], min_xdata = xdata[0];
-  double max_abserr = max_abserr = fabs(xdata[0] - odata[0]);
-
-  double sum_0 = 0, sum_x = 0;
-  for (size_t i = 0; i < len; i++) sum_0 += odata[i], sum_x += xdata[i];
-
-  double mean_odata = sum_0 / len, mean_xdata = sum_x / len;
-  double sum_var_odata = 0, sum_var_xdata = 0, sum_err2 = 0, sum_corr = 0,
-         rel_abserr = 0;
-
-  double max_pwrrel_abserr = 0;
-  size_t max_abserr_index = 0;
-  for (size_t i = 0; i < len; i++) {
-    max_odata = max_odata < odata[i] ? odata[i] : max_odata;
-    min_odata = min_odata > odata[i] ? odata[i] : min_odata;
-
-    max_xdata = max_xdata < odata[i] ? odata[i] : max_xdata;
-    min_xdata = min_xdata > xdata[i] ? xdata[i] : min_xdata;
-
-    float abserr = fabs(xdata[i] - odata[i]);
-    if (odata[i] != 0) {
-      rel_abserr = abserr / fabs(odata[i]);
-      max_pwrrel_abserr =
-          max_pwrrel_abserr < rel_abserr ? rel_abserr : max_pwrrel_abserr;
-    }
-    max_abserr_index = max_abserr < abserr ? i : max_abserr_index;
-    max_abserr = max_abserr < abserr ? abserr : max_abserr;
-    sum_corr += (odata[i] - mean_odata) * (xdata[i] - mean_xdata);
-    sum_var_odata += (odata[i] - mean_odata) * (odata[i] - mean_odata);
-    sum_var_xdata += (xdata[i] - mean_xdata) * (xdata[i] - mean_xdata);
-    sum_err2 += abserr * abserr;
-  }
-  double std_odata = sqrt(sum_var_odata / len);
-  double std_xdata = sqrt(sum_var_xdata / len);
-  double ee = sum_corr / len;
-
-  double inputRange = max_odata - min_odata;
-  double mse = sum_err2 / len;
-  double psnr = 20 * log10(inputRange) - 10 * log10(mse);
-  std::cout << "PSNR: " << psnr << std::endl;
-}
-
-}  // namespace fzgpu::utils
-
 #define CHECK_CUDA2(err) (check_cuda_error(err, __FILE__, __LINE__))
 
 namespace fzgpu {
@@ -87,7 +39,7 @@ internal_membuf::internal_membuf(config_map config, bool _verifiy_on) :
   auto pad_len = config["pad_len"];
   auto chunk_size = config["chunk_size"];
 
-  CHECK_CUDA2(cudaMalloc(&d_input, sizeof(float) * pad_len));
+  // CHECK_CUDA2(cudaMalloc(&d_input, sizeof(float) * pad_len));
   CHECK_CUDA2(cudaMalloc(&d_quantcode, sizeof(uint16_t) * pad_len));
   CHECK_CUDA2(cudaMalloc(&d_signum, sizeof(bool) * pad_len));
   CHECK_CUDA2(cudaMalloc(&d_comp_out, sizeof(uint16_t) * pad_len));
@@ -117,8 +69,8 @@ internal_membuf::internal_membuf(config_map config, bool _verifiy_on) :
 
 internal_membuf::~internal_membuf()
 {
+  // CHECK_CUDA2(cudaFree(d_input));
   CHECK_CUDA2(cudaFree(d_quantcode));
-  CHECK_CUDA2(cudaFree(d_input));
   CHECK_CUDA2(cudaFree(d_signum));
   CHECK_CUDA2(cudaFree(d_comp_out));
   CHECK_CUDA2(cudaFree(d_bitflag_array));
@@ -140,7 +92,89 @@ internal_membuf::~internal_membuf()
 
 namespace fzgpu {
 
-void fzgpu_compressor_roundtrip(
+Compressor::Compressor(int const x, int const y, int const z) :
+    config(fzgpu::utils::configure_fzgpu(x, y, z)),
+    len3(dim3(x, y, z)),
+    x(x),
+    y(y),
+    z(z)
+{
+  buf = new fzgpu::internal_membuf(config);
+}
+
+Compressor::~Compressor() { delete buf; }
+
+void Compressor::profile_data_range(
+    float* h_input, size_t const len, double& range)
+{
+  range = *std::max_element(h_input, h_input + len) -
+          *std::min_element(h_input, h_input + len);
+}
+
+void Compressor::postenc_make_offsetsum_on_host()
+{
+  CHECK_CUDA2(cudaMemcpy(
+      &membuf()->h_offset_sum, membuf()->d_offset_counter, sizeof(uint32_t),
+      cudaMemcpyDeviceToHost));
+}
+
+size_t Compressor::postenc_calc_compressed_size()
+{
+  return sizeof(uint32_t) * config.at("chunk_size") +  // d_bitflag_array
+         membuf()->h_offset_sum * sizeof(uint32_t) +   // partially d_comp_out
+         sizeof(uint32_t) *
+             int(this->config.at("quantcode_bytes") / 4096);  // start_pos
+}
+
+void Compressor::compress(
+    float* in, double eb, uint16_t** pd_archive, size_t* archive_size,
+    void* stream)
+{
+  float _time;
+  comp_start = std::chrono::system_clock::now();
+
+  fzgpu::cuhip::GPU_lorenzo_predict_fz_variant(
+      buf->d_input, buf->d_quantcode, buf->d_signum, len3, eb, _time,
+      (cudaStream_t)stream);
+
+  fzgpu::cuhip::GPU_FZ_encode(
+      buf->d_quantcode, buf->d_comp_out, buf->d_offset_counter,
+      buf->d_bitflag_array, buf->d_start_pos, buf->d_comp_size, x, y, z,
+      (cudaStream_t)stream);
+
+  cudaStreamSynchronize((cudaStream_t)stream);
+  comp_end = std::chrono::system_clock::now();
+
+  *pd_archive = buf->d_comp_out;
+
+  postenc_make_offsetsum_on_host();
+  *archive_size = postenc_calc_compressed_size();
+}
+
+void Compressor::decompress(uint16_t* d_archive, double const eb, void* stream)
+{
+  float _time;
+  decomp_start = std::chrono::system_clock::now();
+
+  fzgpu::cuhip::GPU_FZ_decode(
+      d_archive, buf->d_decomp_quantcode, buf->d_bitflag_array,
+      buf->d_start_pos, x, y, z, (cudaStream_t)stream);
+
+  fzgpu::cuhip::GPU_reverse_lorenzo_predict_fz_variant(
+      buf->d_signum, buf->d_decomp_quantcode, buf->d_decomp_output, len3, eb,
+      _time, (cudaStream_t)stream);
+
+  cudaStreamSynchronize((cudaStream_t)stream);
+  decomp_end = std::chrono::system_clock::now();
+}
+
+void fzgpu_cli_compressor_roundtrip(
+    std::string fname, int const x, int const y, int const z, double eb)
+{
+}
+
+// TODO move to example/test
+void fzgpu_reference_compressor_roundtrip(
     std::string fname, int const x, int const y, int const z, double eb)
 {
   auto config = fzgpu::utils::configure_fzgpu(x, y, z);
@@ -153,22 +187,30 @@ void fzgpu_compressor_roundtrip(
   fzgpu::time_t comp_start, comp_end, decomp_start, decomp_end;
 
   buf.h_input = io::read_binary_to_new_array<float>(fname, config["pad_len"]);
+  CHECK_CUDA2(cudaMalloc(&buf.d_input, sizeof(float) * config["len"]));
+  CHECK_CUDA2(cudaMemset(buf.d_input, 0x0, sizeof(float) * config["len"]));
+
   double range =
       *std::max_element(buf.h_input, buf.h_input + config["pad_len"]) -
       *std::min_element(buf.h_input, buf.h_input + config["pad_len"]);
+
+  eb *= range;
 
   CHECK_CUDA2(cudaMemcpy(
       buf.d_input, buf.h_input, sizeof(float) * config["len"],
       cudaMemcpyHostToDevice));
 
-  cudaStream_t stream;
+  //// data is ready
+  ////////////////////////////////////////////////////////////////
+
+  cudaStream_t stream;  // external to compressor
   cudaStreamCreate(&stream);
 
   comp_start = std::chrono::system_clock::now();
 
   fzgpu::cuhip::GPU_lorenzo_predict_fz_variant(
-      buf.d_input, buf.d_quantcode, buf.d_signum, len3, eb * range,
-      time_elapsed, stream);
+      buf.d_input, buf.d_quantcode, buf.d_signum, len3, eb, time_elapsed,
+      stream);
 
   fzgpu::cuhip::GPU_FZ_encode(
       buf.d_quantcode, buf.d_comp_out, buf.d_offset_counter,
@@ -184,8 +226,8 @@ void fzgpu_compressor_roundtrip(
       buf.d_start_pos, x, y, z, stream);
 
   fzgpu::cuhip::GPU_reverse_lorenzo_predict_fz_variant(
-      buf.d_signum, buf.d_decomp_quantcode, buf.d_decomp_output, len3,
-      eb * range, time_elapsed, stream);
+      buf.d_signum, buf.d_decomp_quantcode, buf.d_decomp_output, len3, eb,
+      time_elapsed, stream);
 
   cudaStreamSynchronize(stream);
   decomp_end = std::chrono::system_clock::now();
@@ -203,21 +245,10 @@ void fzgpu_compressor_roundtrip(
 
   cudaStreamSynchronize(stream);
 
-  printf("begin bitshuffle verification\n");
-  bool bitshuffle_verify = true;
-  for (int tmp_idx = 0; tmp_idx < config["len"]; tmp_idx++) {
-    if (buf.h_quantcode[tmp_idx] != buf.h_decomp_quantcode[tmp_idx]) {
-      printf("data type len: %lu\n", config["len"]);
-      printf(
-          "verification failed at index: %d\noriginal quantization code: "
-          "%u\ndecompressed quantization code: %u\n",
-          tmp_idx, buf.h_quantcode[tmp_idx], buf.h_decomp_quantcode[tmp_idx]);
-      bitshuffle_verify = false;
-      break;
-    }
-  }
+  auto bitshuffle_verify = fzgpu::utils::bitshuffle_verify(
+      buf.h_quantcode, buf.h_decomp_quantcode, config["len"]);
 
-  // pre-quantization verification
+  // prequant verification
   CHECK_CUDA2(cudaMemcpy(
       buf.h_decomp_output, buf.d_decomp_output, sizeof(float) * config["len"],
       cudaMemcpyDeviceToHost));
@@ -225,38 +256,23 @@ void fzgpu_compressor_roundtrip(
   cudaStreamSynchronize(stream);
 
   bool prequant_verify = true;
-  if (bitshuffle_verify) {
-    printf("begin pre-quantization verification\n");
-    for (int tmp_idx = 0; tmp_idx < config["len"]; tmp_idx++) {
-      if (std::abs(buf.h_input[tmp_idx] - buf.h_decomp_output[tmp_idx]) >
-          float(eb * 1.01 * range)) {
-        printf(
-            "verification failed at index: %d\noriginal data: "
-            "%f\ndecompressed data: %f\n",
-            tmp_idx, buf.h_input[tmp_idx], buf.h_decomp_output[tmp_idx]);
-        printf(
-            "error is: %f, while error bound is: %f\n",
-            std::abs(buf.h_input[tmp_idx] - buf.h_decomp_output[tmp_idx]),
-            float(eb * range));
-        prequant_verify = false;
-        break;
-      }
-    }
-  }
+  if (bitshuffle_verify)
+    prequant_verify = fzgpu::utils::prequantization_verify(
+        buf.h_input, buf.h_decomp_output, config["len"], eb);
 
   fzgpu::utils::verify_data<float>(
       buf.h_decomp_output, buf.h_input, config["len"]);
 
   // print verification result
   if (bitshuffle_verify) {
-    printf("bitshuffle verification succeed!\n");
+    printf("bitshuffle veri successful!\n");
     if (prequant_verify)
-      printf("pre-quantization verification succeed!\n");
+      printf("prequant veri successful!\n");
     else
-      printf("pre-quantization verification fail\n");
+      printf("prequant veri fail\n");
   }
   else {
-    printf("bitshuffle verification fail\n");
+    printf("bitshuffle veri fail\n");
   }
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -264,39 +280,136 @@ void fzgpu_compressor_roundtrip(
   CHECK_CUDA2(cudaMemcpy(
       &buf.h_offset_sum, buf.d_offset_counter, sizeof(uint32_t),
       cudaMemcpyDeviceToHost));
+
   printf("original size: %ld\n", config["bytes"]);
-  printf(
-      "compressed size: %ld\n",
-      sizeof(uint32_t) * config["chunk_size"] +
-          buf.h_offset_sum * sizeof(uint32_t) +
-          sizeof(uint32_t) * int(config["quantcode_bytes"] / 4096));
-  printf(
-      "compression ratio: %f\n",
-      float(config["bytes"]) /
-          float(
-              sizeof(uint32_t) * config["chunk_size"] +
-              buf.h_offset_sum * sizeof(uint32_t) +
-              sizeof(uint32_t) * floor(config["quantcode_bytes"] / 4096)));
+  auto comp_size = sizeof(uint32_t) * config["chunk_size"] +
+                   buf.h_offset_sum * sizeof(uint32_t) +
+                   sizeof(uint32_t) * int(config["quantcode_bytes"] / 4096);
+  printf("comp_size: %ld\n", comp_size);
+  printf("comp_ratio: %f\n", float(config["bytes"]) / float(comp_size));
 
-  std::chrono::duration<double> comp_time = comp_end - comp_start;
-  std::chrono::duration<double> decomp_time = decomp_end - decomp_start;
+  duration_t comp_time = comp_end - comp_start;
+  duration_t decomp_time = decomp_end - decomp_start;
 
-  std::cout << "compression e2e time: " << comp_time.count() << " s\n";
-  std::cout << "compression e2e throughput: "
-            << float(config["bytes"]) / 1024 / 1024 / 1024 / comp_time.count()
-            << " GB/s\n";
-
-  std::cout << "decompression e2e time: " << decomp_time.count() << " s\n";
-  std::cout << "decompression e2e throughput: "
-            << float(config["bytes"]) / 1024 / 1024 / 1024 /
-                   decomp_time.count()
-            << " GB/s\n";
+  fzgpu::utils::print_speed(
+      comp_time.count(), decomp_time.count(), config["bytes"]);
 
   ////////////////////////////////////////////////////////////////////////////////
 
   cudaStreamDestroy(stream);
 
   delete[] buf.h_input;
+
+  return;
+}
+
+void fzgpu_compressor_roundtrip_v1(
+    std::string fname, int const x, int const y, int const z, double eb)
+{
+  auto config = fzgpu::utils::configure_fzgpu(x, y, z);
+  Compressor cor(x, y, z);
+  double range;
+
+  cor.input_hptr() =
+      io::read_binary_to_new_array<float>(fname, config["pad_len"]);
+  CHECK_CUDA2(cudaMalloc(&cor.input_dptr(), sizeof(float) * config["len"]));
+  CHECK_CUDA2(cudaMemset(cor.input_dptr(), 0, sizeof(float) * config["len"]));
+
+  Compressor::profile_data_range(cor.input_hptr(), config["pad_len"], range);
+  eb *= range;
+
+  CHECK_CUDA2(cudaMemcpy(
+      cor.input_dptr(), cor.input_hptr(), sizeof(float) * config["len"],
+      cudaMemcpyHostToDevice));
+
+  uint16_t* d_compressed_internal{nullptr};
+  size_t compressed_size;
+
+  cudaStream_t stream;  // external to compressor
+  cudaStreamCreate(&stream);
+  //// data is ready
+  cor.compress(
+      cor.input_dptr(), eb, &d_compressed_internal, &compressed_size, stream);
+
+  //// copy out
+  uint16_t* d_compressed_dump;
+  CHECK_CUDA2(
+      cudaMalloc(&d_compressed_dump, compressed_size * sizeof(uint16_t)));
+  CHECK_CUDA2(cudaMemcpy(
+      d_compressed_dump, d_compressed_internal,
+      sizeof(uint16_t) * compressed_size, cudaMemcpyDeviceToDevice));
+
+  //// decompress using external saved archive
+  cor.decompress(d_compressed_dump, eb, stream);
+
+  CHECK_CUDA2(cudaMemcpy(
+      cor.membuf()->h_quantcode, cor.membuf()->d_quantcode,
+      sizeof(uint16_t) * config["len"], cudaMemcpyDeviceToHost));
+
+  // bitshuffle verification
+  CHECK_CUDA2(cudaMemcpy(
+      cor.membuf()->h_decomp_quantcode, cor.membuf()->d_decomp_quantcode,
+      sizeof(uint16_t) * config["len"], cudaMemcpyDeviceToHost));
+
+  cudaStreamSynchronize(stream);
+
+  auto bitshuffle_verify = fzgpu::utils::bitshuffle_verify(
+      cor.membuf()->h_quantcode, cor.membuf()->h_decomp_quantcode,
+      config["len"]);
+
+  // prequant verification
+  CHECK_CUDA2(cudaMemcpy(
+      cor.membuf()->h_decomp_output, cor.membuf()->d_decomp_output,
+      sizeof(float) * config["len"], cudaMemcpyDeviceToHost));
+
+  cudaStreamSynchronize(stream);
+
+  bool prequant_verify = true;
+  if (bitshuffle_verify)
+    prequant_verify = fzgpu::utils::prequantization_verify(
+        cor.membuf()->h_input, cor.membuf()->h_decomp_output, config["len"],
+        eb);
+
+  fzgpu::utils::verify_data<float>(
+      cor.membuf()->h_decomp_output, cor.membuf()->h_input, config["len"]);
+
+  // print verification result
+  if (bitshuffle_verify) {
+    printf("bitshuffle veri successful!\n");
+    if (prequant_verify)
+      printf("prequant veri successful!\n");
+    else
+      printf("prequant veri fail\n");
+  }
+  else {
+    printf("bitshuffle veri fail\n");
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////
+
+  CHECK_CUDA2(cudaMemcpy(
+      &cor.membuf()->h_offset_sum, cor.membuf()->d_offset_counter,
+      sizeof(uint32_t), cudaMemcpyDeviceToHost));
+
+  printf("original size: %ld\n", config["bytes"]);
+  auto comp_size =
+      sizeof(uint32_t) * config["chunk_size"] +        // d_bitflag_array
+      cor.membuf()->h_offset_sum * sizeof(uint32_t) +  // partially d_comp_out
+      sizeof(uint32_t) * int(config["quantcode_bytes"] / 4096);  // start_pos
+  printf("comp_size: %ld\n", comp_size);
+  printf("comp_ratio: %f\n", float(config["bytes"]) / float(comp_size));
+
+  duration_t comp_time = cor.comp_end - cor.comp_start;
+  duration_t decomp_time = cor.decomp_end - cor.decomp_start;
+
+  fzgpu::utils::print_speed(
+      comp_time.count(), decomp_time.count(), config["bytes"]);
+
+  ////////////////////////////////////////////////////////////////////////////////
+
+  cudaStreamDestroy(stream);
+
+  delete[] cor.membuf()->h_input;
 
   return;
 }

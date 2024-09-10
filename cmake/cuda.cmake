@@ -46,6 +46,7 @@ target_link_libraries(fzgpu_cu_module
 
 add_library(fzgpu_cu_driver
     src/fz_driver.cc
+    src/fz_utils.cc
 )
 target_link_libraries(fzgpu_cu_driver
     PUBLIC fzgpu_cu_compile_settings
@@ -54,7 +55,7 @@ target_link_libraries(fzgpu_cu_driver
 
 add_executable(fzcli src/fz_cli.cc)
 set_source_files_properties(src/fz_cli.cc PROPERTIES LANGUAGE CUDA)
-target_link_libraries(fzcli PRIVATE fzgpu_cu_driver fzgpu_cu_driver fzgpu_cu_module)
+target_link_libraries(fzcli PRIVATE fzgpu_cu_driver fzgpu_cu_module)
 set_target_properties(fzcli PROPERTIES OUTPUT_NAME fz)
 
 # enable examples and testing
