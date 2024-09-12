@@ -6,8 +6,14 @@
 #include <cstdint>
 
 #include "fz_module.hh"
+#include "fz_utils.hh"
+#include "utils/io.hh"
+
+#define CHECK_CUDA2(err) (fzgpu::check_cuda_error(err, __FILE__, __LINE__))
 
 namespace fzgpu {
+
+void check_cuda_error(cudaError_t status, const char* file, int line);
 
 using time_t = std::chrono::time_point<std::chrono::system_clock>;
 using duration_t = std::chrono::duration<double>;
@@ -28,7 +34,7 @@ class internal_membuf {
   uint32_t* d_start_pos;
   uint32_t* d_comp_size;
   uint16_t* d_decomp_quantcode;
-  float* d_decomp_output;
+  //   float* d_decomp_output;
   bool* d_signum;
 
   // verification only
@@ -49,7 +55,7 @@ class Compressor {
   dim3 len3;  // TODO use vendor-agnostic type
 
   void postenc_make_offsetsum_on_host();
-  size_t postenc_calc_compressed_size();
+  size_t postenc_calc_compressed_size() const;
 
  public:
   fzgpu::time_t comp_start, comp_end, decomp_start, decomp_end;
@@ -61,23 +67,29 @@ class Compressor {
   static void profile_data_range(
       float* h_input, size_t const len, double& range);
   void compress(
-      float* d_in, double const eb, uint16_t** pd_archive, size_t* archive_size, void* stream);
-  void decompress(uint16_t* d_archive, double const eb, void* stream);
+      float* d_in, double const eb, uint16_t** pd_archive,
+      size_t* archive_size, void* stream);
+  void decompress(
+      uint16_t* d_archive, double const eb, float* d_out, void* stream);
 
   // getter (testing purposes)
   float*& input_hptr() const { return buf->h_input; };
   float*& input_dptr() const { return buf->d_input; };
+  size_t comp_size() const { return postenc_calc_compressed_size(); };
   fzgpu::internal_membuf* const& membuf() const { return buf; };
+
+  void postdecomp_verification(
+      float const* d_out, double const eb, cudaStream_t stream);
 };
 
 }  // namespace fzgpu
 
 namespace fzgpu {
 
-void fzgpu_reference_compressor_roundtrip(
+void compressor_roundtrip_v0(
     std::string fname, int const x, int const y, int const z, double eb);
 
-void fzgpu_compressor_roundtrip_v1(
+void compressor_roundtrip_v1(
     std::string fname, int const x, int const y, int const z, double eb);
 
 }  // namespace fzgpu

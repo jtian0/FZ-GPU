@@ -51,7 +51,7 @@ void verify_data(T* xdata, T* odata, size_t len)
   double inputRange = max_odata - min_odata;
   double mse = sum_err2 / len;
   double psnr = 20 * log10(inputRange) - 10 * log10(mse);
-  std::cout << "PSNR: " << psnr << std::endl;
+  printf("%-*s%10.2f\n", 30, "comp_metric::PSNR", psnr);
 }
 
 bool bitshuffle_verify(
@@ -105,12 +105,14 @@ void print_speed(
   };
 
   printf(
-      "comp_e2e_time (us): %f\n"
-      "comp_e2e_speed (GiB/s): %f\n"
-      "decomp_e2e_time (us): %f\n"
-      "decomp_e2e_speed (GiB/s): %f\n",
-      comp_time * 1e6, GiBps(bytes, comp_time),  //
-      decomp_time * 1e6, GiBps(bytes, comp_time));
+      "%-*s%10.2f\n"
+      "%-*s%10.2f\n"
+      "%-*s%10.2f\n"
+      "%-*s%10.2f\n",
+      30, "e2e_time::comp::1e-6_sec", comp_time * 1e6,      //
+      30, "speed::comp::GiBps", GiBps(bytes, comp_time),    //
+      30, "e2e_time::decomp::1e-6_sec", decomp_time * 1e6,  //
+      30, "speed::decomp::GiBps", GiBps(bytes, decomp_time));
 }
 
 }  // namespace fzgpu::utils
