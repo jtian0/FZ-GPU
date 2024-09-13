@@ -5,6 +5,8 @@
 // It is okay to only include PROJ_error_status at moduel level.
 // However, it should not be inlined in this file.
 
+#include <cstdint>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

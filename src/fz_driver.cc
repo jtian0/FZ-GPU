@@ -4,9 +4,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+
+using std::cout;
+using std::endl;
 
 namespace fzgpu {
 
@@ -27,6 +31,8 @@ internal_membuf::internal_membuf(config_map config, bool _verifiy_on) :
   auto grid_x = config["grid_x"];
   auto pad_len = config["pad_len"];
   auto chunk_size = config["chunk_size"];
+
+  cout <<  pad_len << endl;
 
   // CHECK_CUDA2(cudaMalloc(&d_input, sizeof(float) * pad_len));
   CHECK_CUDA2(cudaMalloc(&d_quantcode, sizeof(uint16_t) * pad_len));
