@@ -26,10 +26,7 @@ typedef fzgpu_error_status fzgpuerror;
 #include <string>
 #include <unordered_map>
 
-#define FZ_KERNEL_ONLY 1
-
-#define KERNEL_CUHIP_fz_encode compressionFusedKernel
-#define KERNEL_CUHIP_fz_decode decompressionFusedKernel
+#define NON_INTRUSIVE_MOD_2409 1
 
 namespace fzgpu {
 

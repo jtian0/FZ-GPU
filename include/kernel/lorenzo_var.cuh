@@ -41,8 +41,21 @@
 #include "../utils/cuda_err.cuh"
 #include "../utils/timer.hh"
 
+#ifdef NON_INTRUSIVE_MOD_2409
+#define c_lorenzo_1d1l KERNEL_CUHIP_c_lorenzo_1d1l
+#define c_lorenzo_2d1l_16x16data_mapto16x2 KERNEL_CUHIP_c_lorenzo_2d1l_16x16data_mapto16x2
+#define c_lorenzo_3d1l_32x8x8data_mapto32x1x8 KERNEL_CUHIP_c_lorenzo_3d1l_32x8x8data_mapto32x1x8
+#define x_lorenzo_1d1l KERNEL_CUHIP_x_lorenzo_1d1l
+#define x_lorenzo_2d1l_16x16data_mapto16x2 KERNEL_CUHIP_x_lorenzo_2d1l_16x16data_mapto16x2
+#define x_lorenzo_3d1l_32x8x8data_mapto32x1x8 KERNEL_CUHIP_x_lorenzo_3d1l_32x8x8data_mapto32x1x8
+#endif
+
+#ifndef NON_INTRUSIVE_MOD_2409
 namespace cusz {
 namespace experimental {
+#else
+namespace psz {
+#endif
 
 template <typename Data, typename ErrCtrl, int SEQ, bool FIRST_POINT>
 __forceinline__ __device__ void
@@ -182,7 +195,11 @@ template <
     typename FP,
     int BLOCK,
     int SEQ>
+#ifndef NON_INTRUSIVE_MOD_2409
 __global__ void c_lorenzo_1d1l(  //
+#else
+__global__ void KERNEL_CUHIP_c_lorenzo_1d1l(  //
+#endif
     Data*    data,
     ErrCtrl* delta,
     bool*    signum,
@@ -217,7 +234,11 @@ __global__ void c_lorenzo_1d1l(  //
 }
 
 template <typename Data = float, typename ErrCtrl = uint16_t, typename FP = float>
+#ifndef NON_INTRUSIVE_MOD_2409
 __global__ void c_lorenzo_2d1l_16x16data_mapto16x2(
+#else
+__global__ void KERNEL_CUHIP_c_lorenzo_2d1l_16x16data_mapto16x2(
+#endif
     Data*    data,    // input
     ErrCtrl* delta,   // output
     bool*    signum,  // output
@@ -241,7 +262,11 @@ __global__ void c_lorenzo_2d1l_16x16data_mapto16x2(
 }
 
 template <typename Data, typename ErrCtrl = uint16_t, typename FP = float>
+#ifndef NON_INTRUSIVE_MOD_2409
 __global__ void c_lorenzo_3d1l_32x8x8data_mapto32x1x8(
+#else
+__global__ void KERNEL_CUHIP_c_lorenzo_3d1l_32x8x8data_mapto32x1x8(
+#endif
     Data*    data,    // input
     ErrCtrl* delta,   // output
     bool*    signum,  // output
@@ -298,7 +323,11 @@ __global__ void c_lorenzo_3d1l_32x8x8data_mapto32x1x8(
 }
 
 template <typename Data = float, typename ErrCtrl = uint16_t, typename FP = float, int BLOCK = 256, int SEQ = 8>
+#ifndef NON_INTRUSIVE_MOD_2409
 __global__ void x_lorenzo_1d1l(  //
+#else
+__global__ void KERNEL_CUHIP_x_lorenzo_1d1l(  //
+#endif
     bool*    signum,
     ErrCtrl* delta,
     Data*    xdata,
@@ -366,8 +395,12 @@ __global__ void x_lorenzo_1d1l(  //
 }
 
 template <typename Data = float, typename ErrCtrl = uint16_t, typename FP = float>
-__global__ void
-x_lorenzo_2d1l_16x16data_mapto16x2(bool* signum, ErrCtrl* delta, Data* xdata, dim3 len3, dim3 stride3, FP ebx2)
+#ifndef NON_INTRUSIVE_MOD_2409
+__global__ void x_lorenzo_2d1l_16x16data_mapto16x2
+#else
+__global__ void KERNEL_CUHIP_x_lorenzo_2d1l_16x16data_mapto16x2
+#endif
+(bool* signum, ErrCtrl* delta, Data* xdata, dim3 len3, dim3 stride3, FP ebx2)
 {
     constexpr auto BLOCK = 16;
     constexpr auto YSEQ  = BLOCK / 2;  // sequentiality in y direction
@@ -448,8 +481,12 @@ x_lorenzo_2d1l_16x16data_mapto16x2(bool* signum, ErrCtrl* delta, Data* xdata, di
 }
 
 template <typename Data = float, typename ErrCtrl = uint16_t, typename FP = float>
-__global__ void
-x_lorenzo_3d1l_32x8x8data_mapto32x1x8(bool* signum, ErrCtrl* delta, Data* xdata, dim3 len3, dim3 stride3, FP ebx2)
+#ifndef NON_INTRUSIVE_MOD_2409
+__global__ void x_lorenzo_3d1l_32x8x8data_mapto32x1x8
+#else
+__global__ void KERNEL_CUHIP_x_lorenzo_3d1l_32x8x8data_mapto32x1x8
+#endif
+(bool* signum, ErrCtrl* delta, Data* xdata, dim3 len3, dim3 stride3, FP ebx2)
 {
     constexpr auto BLOCK = 8;
     constexpr auto YSEQ  = BLOCK;
@@ -530,6 +567,11 @@ x_lorenzo_3d1l_32x8x8data_mapto32x1x8(bool* signum, ErrCtrl* delta, Data* xdata,
     /* EOF */
 }
 
+
+#ifdef NON_INTRUSIVE_MOD_2409
+namespace cuhip {
+#endif
+
 template <typename T, typename DeltaT, typename FP>
 void launch_construct_LorenzoI_var(
     T*           data,
@@ -582,18 +624,18 @@ void launch_construct_LorenzoI_var(
     timer.timer_start(stream);
 
     if (ndim() == 1) {
-        cusz::experimental::c_lorenzo_1d1l<T, DeltaT, FP, SUBLEN_1D, SEQ_1D>  //
-            <<<GRID_1D, BLOCK_1D, 0, stream>>>                                //
+        c_lorenzo_1d1l<T, DeltaT, FP, SUBLEN_1D, SEQ_1D>    //
+            <<<GRID_1D, BLOCK_1D, 0, stream>>>              //
             (data, delta, signum, len3, leap3, ebx2_r);
     }
     else if (ndim() == 2) {
-        cusz::experimental::c_lorenzo_2d1l_16x16data_mapto16x2<T, DeltaT, FP>  //
-            <<<GRID_2D, BLOCK_2D, 0, stream>>>                                 //
+        c_lorenzo_2d1l_16x16data_mapto16x2<T, DeltaT, FP>   //
+            <<<GRID_2D, BLOCK_2D, 0, stream>>>              //
             (data, delta, signum, len3, leap3, ebx2_r);
     }
     else if (ndim() == 3) {
-        cusz::experimental::c_lorenzo_3d1l_32x8x8data_mapto32x1x8<T, DeltaT, FP>  //
-            <<<GRID_3D, BLOCK_3D, 0, stream>>>                                    //
+        c_lorenzo_3d1l_32x8x8data_mapto32x1x8<T, DeltaT, FP>//
+            <<<GRID_3D, BLOCK_3D, 0, stream>>>              //
             (data, delta, signum, len3, leap3, ebx2_r);
     }
     else {
@@ -661,18 +703,18 @@ void launch_reconstruct_LorenzoI_var(
     timer.timer_start(stream);
 
     if (ndim() == 1) {
-        cusz::experimental::x_lorenzo_1d1l<T, DeltaT, FP, 256, 8>  //
-            <<<GRID_1D, BLOCK_1D, 0, stream>>>                     //
+        x_lorenzo_1d1l<T, DeltaT, FP, 256, 8>   //
+            <<<GRID_1D, BLOCK_1D, 0, stream>>>  //
             (signum, delta, xdata, len3, leap3, ebx2);
     }
     else if (ndim() == 2) {
-        cusz::experimental::x_lorenzo_2d1l_16x16data_mapto16x2<T, DeltaT, FP>  //
-            <<<GRID_2D, BLOCK_2D, 0, stream>>>                                 //
+        x_lorenzo_2d1l_16x16data_mapto16x2<T, DeltaT, FP>   //
+            <<<GRID_2D, BLOCK_2D, 0, stream>>>              //
             (signum, delta, xdata, len3, leap3, ebx2);
     }
     else {
-        cusz::experimental::x_lorenzo_3d1l_32x8x8data_mapto32x1x8<T, DeltaT, FP>  //
-            <<<GRID_3D, BLOCK_3D, 0, stream>>>                                    //
+        x_lorenzo_3d1l_32x8x8data_mapto32x1x8<T, DeltaT, FP>//
+            <<<GRID_3D, BLOCK_3D, 0, stream>>>              //
             (signum, delta, xdata, len3, leap3, ebx2);
     }
 
@@ -685,9 +727,16 @@ void launch_reconstruct_LorenzoI_var(
     time_elapsed = timer.get_time_elapsed();
 }
 
-//
+#ifdef NON_INTRUSIVE_MOD_2409
+} // namespace cuhip
+#endif
+
+#ifndef NON_INTRUSIVE_MOD_2409
 }  // namespace experimental
 }  // namespace cusz
+#else
+}  // namespace psz
+#endif
 
 #undef TIX
 #undef TIY

@@ -1,4 +1,3 @@
-
 #include <cstdint>
 
 #include "fz_module.hh"
@@ -52,7 +51,7 @@ fzgpuerror GPU_lorenzo_predict_fz_variant(
     T* d_input, E* d_quantcode, bool* d_signum, dim3 const input_dim3,
     double const eb, float& time_elapsed, cudaStream_t stream)
 {
-  cusz::experimental::launch_construct_LorenzoI_var<T, E, FP>(
+  psz::cuhip::launch_construct_LorenzoI_var<T, E, FP>(
       d_input, d_quantcode, d_signum, input_dim3, eb, time_elapsed, stream);
 
   return FZGPU_SUCCESS;
@@ -62,7 +61,7 @@ fzgpuerror GPU_reverse_lorenzo_predict_fz_variant(
     bool* d_signum, E* d_quantcode, T* d_decomp_output, dim3 const input_dim3,
     double const eb, float& time_elapsed, cudaStream_t stream)
 {
-  cusz::experimental::launch_reconstruct_LorenzoI_var<float, uint16_t, float>(
+  psz::cuhip::launch_reconstruct_LorenzoI_var<float, uint16_t, float>(
       d_signum, d_quantcode, d_decomp_output, input_dim3, eb, time_elapsed,
       stream);
 
@@ -78,7 +77,7 @@ fzgpuerror GPU_FZ_encode(
   dim3 grid = dim3(config["grid_x"]);
   dim3 block(32, 32);
 
-  fzgpu::KERNEL_CUHIP_fz_encode<<<grid, block, 0, stream>>>(
+  fzgpu::KERNEL_CUHIP_fz_fused_encode<<<grid, block, 0, stream>>>(
       (uint32_t*)d_quantcode, (uint32_t*)d_comp_out, d_offset_counter,
       d_bitflag_array, d_start_pos, d_comp_size);
 
@@ -96,7 +95,7 @@ fzgpuerror GPU_FZ_decode(
   dim3 grid = dim3(config["grid_x"]);
   dim3 block(32, 32);
 
-  fzgpu::KERNEL_CUHIP_fz_decode<<<grid, block, 0, stream>>>(
+  fzgpu::KERNEL_CUHIP_fz_fused_decode<<<grid, block, 0, stream>>>(
       (uint32_t*)d_comp_out, (uint32_t*)d_decomp_quantcode, d_bitflag_array,
       d_start_pos);
 

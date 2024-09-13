@@ -1,4 +1,4 @@
-#ifndef FZ_KERNEL_ONLY
+#ifndef NON_INTRUSIVE_MOD_2409
 
 #include <cuda_runtime.h>
 #include <dirent.h>
@@ -112,7 +112,11 @@ void write_array_to_binary(const std::string& fname, T* const _a, size_t const d
 
 #endif
 
+#ifndef NON_INTRUSIVE_MOD_2409
 __global__ void compressionFusedKernel(
+#else
+__global__ void KERNEL_CUHIP_fz_fused_encode(
+#endif
     const uint32_t* __restrict__ in,
     uint32_t* __restrict__ out,
     uint32_t* deviceOffsetCounter,
@@ -269,7 +273,11 @@ __global__ void compressionFusedKernel(
     } 
 }
 
+#ifndef NON_INTRUSIVE_MOD_2409
 __global__ void decompressionFusedKernel(
+#else
+__global__ void KERNEL_CUHIP_fz_fused_decode(
+#endif
     uint32_t* deviceInput,
     uint32_t* deviceOutput,
     uint32_t* deviceBitFlagArr,
@@ -398,7 +406,7 @@ __global__ void decompressionFusedKernel(
     deviceOutput[tid + bid * blockDim.x * blockDim.y] = dataChunk[threadIdx.y][threadIdx.x];
 }
 
-#ifndef FZ_KERNEL_ONLY
+#ifndef NON_INTRUSIVE_MOD_2409
 
 void runFzgpu(std::string fileName, int x, int y, int z, double eb)
 {

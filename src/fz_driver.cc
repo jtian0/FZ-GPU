@@ -158,11 +158,6 @@ void Compressor::decompress(
   decomp_end = std::chrono::system_clock::now();
 }
 
-void fzgpu_cli_compressor_roundtrip(
-    std::string fname, int const x, int const y, int const z, double eb)
-{
-}
-
 void Compressor::postdecomp_verification(
     float const* d_out, double const eb, cudaStream_t stream)
 {
