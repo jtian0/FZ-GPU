@@ -1,6 +1,7 @@
 add_compile_definitions(FZGPU_USE_CUDA)
 
 find_package(CUDAToolkit REQUIRED)
+find_package(OpenMP)
 
 include(GNUInstallDirs)
 include(CTest)
@@ -71,6 +72,15 @@ add_executable(fzcli src/fz_cli.cc)
 set_source_files_properties(src/fz_cli.cc PROPERTIES LANGUAGE CUDA)
 target_link_libraries(fzcli PRIVATE FZGPU::cu_driver FZGPU::cu_module FZGPU::cu_demo)
 set_target_properties(fzcli PROPERTIES OUTPUT_NAME fz)
+
+add_executable(fzms src/fz_ms.cc)
+target_link_libraries(fzms
+    PRIVATE fzgpu_cu_driver fzgpu_cu_module OpenMP::OpenMP_CXX
+)
+add_executable(fzms_v2 src/fz_ms_v2.cu)
+target_link_libraries(fzms_v2
+    PRIVATE fzgpu_cu_driver fzgpu_cu_module OpenMP::OpenMP_CXX
+)
 
 # enable examples and testing
 if(FZGPU_BUILD_EXAMPLES)

@@ -27,6 +27,12 @@ config_map configure_fzgpu(int const x, int const y, int const z)
       quantizationCodeByteLen % (blockSize * UINT32_BIT_LEN) == 0
           ? quantizationCodeByteLen / (blockSize * UINT32_BIT_LEN)
           : int(quantizationCodeByteLen / (blockSize * UINT32_BIT_LEN)) + 1;
+//   cout << "len\t" << dataTypeLen << endl;
+//   cout << "bytes\t" << dataTypeLen * sizeof(float) << endl;
+//   cout << "pad_len\t" << paddingDataTypeLen << endl;
+//   cout << "chunk_size\t" << dataChunkSize << endl;
+//   cout << "quantcode_bytes\t" << quantizationCodeByteLen << endl;
+//   cout << "grid_x\t" << floor(quantizationCodeByteLen / 4096) << endl;
 
   //   dim3 grid(floor(paddingDataTypeLen / 2048));
   return config_map{
@@ -80,7 +86,7 @@ fzgpuerror GPU_FZ_encode(
       (uint32_t*)d_quantcode, (uint32_t*)d_comp_out, d_offset_counter,
       d_bitflag_array, d_start_pos, d_comp_size);
 
-  cudaStreamSynchronize(stream);
+//   cudaStreamSynchronize(stream);
 
   return FZGPU_SUCCESS;
 }

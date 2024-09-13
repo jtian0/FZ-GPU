@@ -620,8 +620,8 @@ void launch_construct_LorenzoI_var(
 
     auto outlier = data;
 
-    cuda_timer_t timer;
-    timer.timer_start(stream);
+    // cuda_timer_t timer;
+    // timer.timer_start(stream);
 
     if (ndim() == 1) {
         c_lorenzo_1d1l<T, DeltaT, FP, SUBLEN_1D, SEQ_1D>    //
@@ -642,13 +642,13 @@ void launch_construct_LorenzoI_var(
         throw std::runtime_error("Lorenzo only works for 123-D.");
     }
 
-    timer.timer_end(stream);
-    if (stream)
-        CHECK_CUDA(cudaStreamSynchronize(stream));
-    else
-        CHECK_CUDA(cudaDeviceSynchronize());
+    // timer.timer_end(stream);
+    // if (stream)
+    //     CHECK_CUDA(cudaStreamSynchronize(stream));
+    // else
+    //     CHECK_CUDA(cudaDeviceSynchronize());
 
-    time_elapsed = timer.get_time_elapsed();
+    // time_elapsed = timer.get_time_elapsed();
 }
 
 template <typename T, typename DeltaT, typename FP>
@@ -699,8 +699,8 @@ void launch_reconstruct_LorenzoI_var(
 
     auto outlier = xdata;
 
-    cuda_timer_t timer;
-    timer.timer_start(stream);
+    // cuda_timer_t timer;
+    // timer.timer_start(stream);
 
     if (ndim() == 1) {
         x_lorenzo_1d1l<T, DeltaT, FP, 256, 8>   //
@@ -718,13 +718,13 @@ void launch_reconstruct_LorenzoI_var(
             (signum, delta, xdata, len3, leap3, ebx2);
     }
 
-    timer.timer_end(stream);
+    // timer.timer_end(stream);
     if (stream)
         CHECK_CUDA(cudaStreamSynchronize(stream));
     else
         CHECK_CUDA(cudaDeviceSynchronize());
 
-    time_elapsed = timer.get_time_elapsed();
+    // time_elapsed = timer.get_time_elapsed();
 }
 
 #ifdef NON_INTRUSIVE_MOD_2409
