@@ -7,6 +7,8 @@ This software is implemented and optimized based on the [cuSZ](https://github.co
 - Developers: Boyuan Zhang, Jiannan Tian
 - Contributors (alphabetic): Dingwen Tao, Franck Cappello, Sheng Di, Xiaodong Yu
 
+> 24-09 update: for (initial) cmake support and other changes, please refer to [README-cmake.md](README-cmake.md)
+
 ## Recommended Environment
 - Linux OS with NVIDIA GPUs
 - GCC (>= 7.3.0)
@@ -60,22 +62,15 @@ You will observe the time for each kernel, i.e., cusz::experimental::c_lorenzo_1
 **HPDC '23: FZ-GPU** ([local copy](HPDC23-FZ-GPU.pdf), [via ACM](https://dl.acm.org/doi/10.1145/3588195.3592994), or [via arXiv](https://arxiv.org/abs/2304.12557))
 
 ```bibtex
-@inproceedings{fz2023zhang,
-      title = {FZ-GPU: A Fast and High-Ratio Lossy Compressor for Scientific
-Computing Applications on GPUs},
+@inproceedings{zhang2023fzgpu,
+      title = {{FZ-GPU}: A fast and high-ratio lossy compressor for scientific
+computing applications on GPUs},
      author = {Zhang, Boyuan and Tian, Jiannan and Di, Sheng and Yu, Xiaodong and Feng, Yunhe and Liang, Xin and Tao, Dingwen and Cappello, Franck},
-       year = {2023},
-       isbn = {979-8-4007-0155-9/23/06},
-  publisher = {Association for Computing Machinery},
-    address = {New York, NY, USA},
-	url = {https://dl.acm.org/doi/10.1145/3588195.3592994},
-        doi = {10.1145/3588195.3592994},
+       year = {2023}, month = {06},
+        doi = {10.1145/3588195.3592994}, isbn = {979-8-4007-0155-9/23/06},
   booktitle = {Proceedings of the 32nd International Symposium on High-Performance Parallel and Distributed Computing},
-   numpages = {14},
    keywords = {Lossy compression; scientific data; GPU; performance},
-   location = {Orlando, FL, USA},
-     series = {HPDC '23}
-}
+     series = {HPDC '23}, address = {Orlando, FL, USA}}
 ```
 
 ## Acknowledgements
