@@ -35,9 +35,8 @@ config_map configure_fzgpu(int const x, int const y, int const z)
       {"pad_len", paddingDataTypeLen},
       {"chunk_size", dataChunkSize},
       {"quantcode_bytes", quantizationCodeByteLen},
-    //   {"grid_x", floor(paddingDataTypeLen / 2048)}
-      {"grid_x", floor(quantizationCodeByteLen / 4096)}
-      };
+      //   {"grid_x", floor(paddingDataTypeLen / 2048)}
+      {"grid_x", floor(quantizationCodeByteLen / 4096)}};
 }
 }  // namespace fzgpu::utils
 

@@ -56,9 +56,20 @@ target_link_libraries(fzgpu_cu_driver
 )
 add_library(FZGPU::cu_driver ALIAS fzgpu_cu_driver)
 
+add_library(fzgpu_cu_demo
+    src/fz_demo.cc
+)
+target_link_libraries(fzgpu_cu_demo
+    PUBLIC FZGPU::cu_compile_settings
+    CUDA::cudart
+    FZGPU::cu_module
+    FZGPU::cu_driver
+)
+add_library(FZGPU::cu_demo ALIAS fzgpu_cu_demo)
+
 add_executable(fzcli src/fz_cli.cc)
 set_source_files_properties(src/fz_cli.cc PROPERTIES LANGUAGE CUDA)
-target_link_libraries(fzcli PRIVATE FZGPU::cu_driver FZGPU::cu_module)
+target_link_libraries(fzcli PRIVATE FZGPU::cu_driver FZGPU::cu_module FZGPU::cu_demo)
 set_target_properties(fzcli PROPERTIES OUTPUT_NAME fz)
 
 # enable examples and testing
